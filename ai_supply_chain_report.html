@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Supply Chain Screener</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap');
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #141720;
+    --border:  #1e2230;
+    --text:    #d4d8e8;
+    --muted:   #5a607a;
+    --accent:  #4f8ef7;
+    --green:   #22c55e;
+    --red:     #ef4444;
+    --yellow:  #f59e0b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans KR', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 32px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: #fff;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  .meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.7;
+  }
+
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 16px 40px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .stat-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    padding: 0 40px 40px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  thead th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+  }
+
+  thead th:hover { color: var(--accent); }
+  thead th.th-left { text-align: left; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  tbody tr:hover { background: rgba(79,142,247,0.05); }
+
+  td {
+    padding: 9px 8px;
+    text-align: right;
+    white-space: nowrap;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+
+  td.rank  { color: var(--muted); font-size: 11px; }
+  td.ticker { text-align: left; font-weight: 600; color: var(--accent); }
+  td.company { text-align: left; color: var(--text); font-family: 'IBM Plex Sans KR', sans-serif; font-size: 12px; min-width: 180px; }
+  td.num   { color: #e2e5f0; }
+  td.spark { padding: 4px 8px; }
+
+  .pos  { color: var(--green); }
+  .neg  { color: var(--red); }
+  .bold { font-weight: 600; }
+  .na   { color: var(--muted); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .badge-green  { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .badge-red    { background: rgba(239,68,68,0.15);  color: var(--red); }
+
+  .sma-up { color: var(--green); font-size: 11px; }
+  .sma-dn { color: var(--red);   font-size: 11px; }
+
+  footer {
+    padding: 16px 40px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI <span>Supply Chain</span> Screener</h1>
+  <div class="meta">
+    <div>업데이트: 2026년 04월 21일  17:25</div>
+    <div>종목 수: 23개 · 데이터: Yahoo Finance</div>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-label">총 종목</div>
+    <div class="stat-val">23</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">200SMA 위</div>
+    <div class="stat-val" style="color:var(--green)">13</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">200SMA 아래</div>
+    <div class="stat-val" style="color:var(--red)">10</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">평균 P/S</div>
+    <div class="stat-val">19.6x</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">평균 P/E</div>
+    <div class="stat-val">nanx</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">YTD 상승 종목</div>
+    <div class="stat-val" style="color:var(--green)">12</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">1Y 상승 종목</div>
+    <div class="stat-val" style="color:var(--green)">20</div>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th class="th-left" onclick="sortTable(0)">#</th>
+        <th class="th-left" onclick="sortTable(1)">Ticker</th>
+        <th class="th-left" onclick="sortTable(2)">Company</th>
+        <th onclick="sortTable(3)">Price</th>
+        <th onclick="sortTable(4)">Mkt Cap</th>
+        <th onclick="sortTable(5)">P/S</th>
+        <th onclick="sortTable(6)">P/E</th>
+        <th onclick="sortTable(7)">% YTD</th>
+        <th>Chart 1Y</th>
+        <th onclick="sortTable(9)">% 1Y</th>
+        <th onclick="sortTable(10)">△ Highs</th>
+        <th>20SMA</th>
+        <th>50SMA</th>
+        <th>200SMA</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td class="rank">1</td>
+          <td class="ticker">COHR</td>
+          <td class="company">Coherent</td>
+          <td class="num">$347.51</td>
+          <td class="num">$65.2B</td>
+          <td class="num">10.35</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.78);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+78.82%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,25.5 1.6,22.4 3.3,25.4 4.9,26.4 6.5,28.0 8.2,27.8 9.8,27.2 11.4,26.3 13.1,24.5 14.7,21.2 16.3,21.0 18.0,19.7 19.6,17.0 21.2,20.7 22.9,18.9 24.5,10.4 26.1,14.2 27.8,15.5 29.4,20.0 31.0,23.8 32.7,20.3 34.3,18.5 35.9,20.5 37.6,22.6 39.2,22.3 40.8,21.3 42.4,21.7 44.1,19.2 45.7,15.3 47.3,20.0 49.0,19.7 50.6,16.0 52.2,16.1 53.9,22.2 55.5,22.2 57.1,27.2 58.8,23.3 60.4,21.2 62.0,19.0 63.7,20.1 65.3,19.7 66.9,14.0 68.6,13.5 70.2,8.5 71.8,8.4 73.5,7.3 75.1,8.4 76.7,4.2 78.4,0.5 80.0,0.0" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.80);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+566.75%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">2</td>
+          <td class="ticker">TER</td>
+          <td class="company">Teradyne</td>
+          <td class="num">$375.21</td>
+          <td class="num">$58.7B</td>
+          <td class="num">18.41</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.80);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+80.85%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,21.0 1.6,18.4 3.3,19.7 4.9,15.4 6.5,18.1 8.2,17.1 9.8,19.5 11.4,17.1 13.1,16.8 14.7,14.5 16.3,16.1 18.0,13.4 19.6,9.8 21.2,12.4 22.9,15.7 24.5,14.2 26.1,19.9 27.8,19.6 29.4,19.5 31.0,28.0 32.7,21.9 34.3,20.8 35.9,20.5 37.6,24.5 39.2,24.5 40.8,21.4 42.4,21.1 44.1,21.0 45.7,20.3 47.3,23.4 49.0,19.9 50.6,15.7 52.2,14.9 53.9,21.7 55.5,22.1 57.1,27.1 58.8,21.9 60.4,17.8 62.0,18.5 63.7,16.9 65.3,15.6 66.9,5.8 68.6,4.2 70.2,3.2 71.8,2.7 73.5,3.9 75.1,4.0 76.7,3.8 78.4,0.0 80.0,1.3" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.64);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+439.47%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">3</td>
+          <td class="ticker">AEIS</td>
+          <td class="company">Advanced Energy</td>
+          <td class="num">$380.22</td>
+          <td class="num">$14.5B</td>
+          <td class="num">8.04</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.72);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+71.33%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,28.0 1.6,26.5 3.3,26.6 4.9,19.2 6.5,18.1 8.2,17.8 9.8,17.8 11.4,16.0 13.1,16.2 14.7,13.6 16.3,14.1 18.0,12.4 19.6,11.7 21.2,12.0 22.9,12.5 24.5,11.3 26.1,15.7 27.8,13.7 29.4,18.5 31.0,23.6 32.7,20.1 34.3,18.5 35.9,17.6 37.6,19.9 39.2,20.8 40.8,19.3 42.4,17.4 44.1,16.4 45.7,14.4 47.3,17.0 49.0,13.9 50.6,7.3 52.2,10.7 53.9,18.1 55.5,18.7 57.1,21.8 58.8,15.7 60.4,13.2 62.0,13.3 63.7,13.4 65.3,11.5 66.9,4.7 68.6,2.7 70.2,1.5 71.8,1.7 73.5,0.0 75.1,2.8 76.7,3.4 78.4,2.5 80.0,1.4" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.52);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+342.94%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">4</td>
+          <td class="ticker">AMKR</td>
+          <td class="company">Amkor Technology</td>
+          <td class="num">$69.44</td>
+          <td class="num">$17.2B</td>
+          <td class="num">2.57</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.63);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+62.10%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,20.0 1.6,16.9 3.3,16.0 4.9,13.3 6.5,17.8 8.2,21.9 9.8,22.5 11.4,22.6 13.1,21.0 14.7,21.4 16.3,22.3 18.0,20.9 19.6,18.5 21.2,20.9 22.9,21.6 24.5,21.6 26.1,24.8 27.8,23.6 29.4,24.8 31.0,27.7 32.7,26.1 34.3,25.4 35.9,25.4 37.6,28.0 39.2,26.3 40.8,24.6 42.4,22.9 44.1,22.4 45.7,21.2 47.3,23.5 49.0,23.2 50.6,19.1 52.2,19.4 53.9,24.1 55.5,24.8 57.1,28.0 58.8,24.2 60.4,22.8 62.0,22.6 63.7,22.3 65.3,21.7 66.9,16.9 68.6,14.2 70.2,11.4 71.8,8.9 73.5,8.1 75.1,9.7 76.7,6.5 78.4,2.1 80.0,0.0" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.51);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+342.20%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">5</td>
+          <td class="ticker">OUST</td>
+          <td class="company">Ouster</td>
+          <td class="num">$27.14</td>
+          <td class="num">$1.7B</td>
+          <td class="num">10.06</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.22);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+16.13%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,20.6 1.6,16.2 3.3,18.9 4.9,22.0 6.5,23.9 8.2,22.3 9.8,22.8 11.4,22.8 13.1,21.5 14.7,22.7 16.3,24.2 18.0,22.6 19.6,19.6 21.2,20.0 22.9,21.8 24.5,18.4 26.1,14.4 27.8,12.7 29.4,15.9 31.0,18.3 32.7,17.6 34.3,12.7 35.9,6.4 37.6,12.2 39.2,15.1 40.8,15.6 42.4,15.3 44.1,17.1 45.7,16.2 47.3,18.9 49.0,15.9 50.6,17.5 52.2,18.4 53.9,20.9 55.5,25.3 57.1,28.0 58.8,23.4 60.4,22.7 62.0,20.4 63.7,20.9 65.3,20.8 66.9,18.3 68.6,18.9 70.2,17.2 71.8,14.0 73.5,9.9 75.1,7.2 76.7,7.9 78.4,7.7 80.0,0.0" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.46);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+302.67%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">6</td>
+          <td class="ticker">SYM</td>
+          <td class="company">Symbotic</td>
+          <td class="num">$65.13</td>
+          <td class="num">$39.2B</td>
+          <td class="num">16.41</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.08);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+0.40%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,8.5 1.6,4.1 3.3,3.8 4.9,10.6 6.5,16.5 8.2,16.1 9.8,15.5 11.4,17.6 13.1,15.9 14.7,17.9 16.3,17.0 18.0,14.0 19.6,14.2 21.2,12.2 22.9,16.4 24.5,17.3 26.1,19.7 27.8,17.5 29.4,18.9 31.0,26.1 32.7,23.5 34.3,24.1 35.9,22.3 37.6,23.0 39.2,24.8 40.8,22.4 42.4,19.9 44.1,23.8 45.7,21.9 47.3,23.7 49.0,19.8 50.6,19.2 52.2,18.6 53.9,22.6 55.5,23.2 57.1,28.0 58.8,18.9 60.4,16.3 62.0,18.6 63.7,18.7 65.3,21.4 66.9,16.7 68.6,18.2 70.2,17.9 71.8,16.6 73.5,13.5 75.1,10.1 76.7,7.2 78.4,3.1 80.0,0.0" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.37);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+231.96%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">7</td>
+          <td class="ticker">RCAT</td>
+          <td class="company">Red Cat Holdings</td>
+          <td class="num">$12.60</td>
+          <td class="num">$1.5B</td>
+          <td class="num">37.46</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.41);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+37.50%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,21.3 1.6,16.0 3.3,21.3 4.9,24.3 6.5,28.0 8.2,27.4 9.8,27.3 11.4,24.0 13.1,20.3 14.7,22.1 16.3,20.5 18.0,20.1 19.6,22.3 21.2,19.5 22.9,26.1 24.5,16.2 26.1,11.2 27.8,11.1 29.4,9.3 31.0,8.0 32.7,14.1 34.3,11.3 35.9,4.1 37.6,4.1 39.2,5.6 40.8,7.1 42.4,0.1 44.1,0.0 45.7,9.1 47.3,18.3 49.0,9.0 50.6,4.5 52.2,5.5 53.9,14.6 55.5,21.0 57.1,26.3 58.8,19.0 60.4,23.6 62.0,19.8 63.7,19.2 65.3,24.0 66.9,19.3 68.6,24.7 70.2,22.5 71.8,20.0 73.5,21.2 75.1,19.3 76.7,16.0 78.4,20.8 80.0,21.5" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.30);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+170.28%</td>
+          <td>—</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">8</td>
+          <td class="ticker">EXAS</td>
+          <td class="company">Exact Sciences</td>
+          <td class="num">$104.91</td>
+          <td class="num">$20.0B</td>
+          <td class="num">6.17</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.11);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+3.12%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,28.0 1.6,26.8 3.3,26.6 4.9,26.5 6.5,25.7 8.2,24.8 9.8,25.6 11.4,24.3 13.1,25.4 14.7,26.5 16.3,24.0 18.0,25.7 19.6,26.6 21.2,26.1 22.9,25.7 24.5,24.1 26.1,24.0 27.8,26.4 29.4,22.5 31.0,17.3 32.7,15.9 34.3,15.6 35.9,14.8 37.6,16.8 39.2,16.7 40.8,16.0 42.4,15.5 44.1,16.2 45.7,14.8 47.3,15.1 49.0,14.3 50.6,16.4 52.2,16.6 53.9,15.3 55.5,15.6 57.1,15.4 58.8,14.1 60.4,15.9 62.0,14.1 63.7,11.8 65.3,15.4 66.9,15.1 68.6,16.4 70.2,13.4 71.8,10.6 73.5,9.7 75.1,11.6 76.7,9.9 78.4,0.0 80.0,0.0" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.26);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+143.41%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">9</td>
+          <td class="ticker">CGNX</td>
+          <td class="company">Cognex</td>
+          <td class="num">$55.48</td>
+          <td class="num">$9.3B</td>
+          <td class="num">9.32</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.53);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">+50.45%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,28.0 1.6,25.7 3.3,25.9 4.9,26.9 6.5,0.2 8.2,0.0 9.8,2.9 11.4,3.5 13.1,4.9 14.7,4.7 16.3,4.0 18.0,1.6 19.6,2.3 21.2,5.7 22.9,7.3 24.5,8.3 26.1,8.7 27.8,9.4 29.4,12.7 31.0,15.8 32.7,13.5 34.3,13.9 35.9,13.2 37.6,17.0 39.2,18.3 40.8,15.6 42.4,14.7 44.1,15.1 45.7,14.4 47.3,16.2 49.0,13.5 50.6,13.1 52.2,12.1 53.9,16.0 55.5,19.0 57.1,21.8 58.8,16.6 60.4,16.0 62.0,16.3 63.7,15.7 65.3,12.0 66.9,8.4 68.6,8.2 70.2,9.0 71.8,7.4 73.5,5.3 75.1,6.9 76.7,6.4 78.4,5.5 80.0,5.5" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.26);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+138.09%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">10</td>
+          <td class="ticker">PRLB</td>
+          <td class="company">Proto Labs</td>
+          <td class="num">$64.50</td>
+          <td class="num">$1.5B</td>
+          <td class="num">2.88</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.31);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+25.61%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,0.7 1.6,3.4 3.3,2.5 4.9,0.8 6.5,2.3 8.2,0.0 9.8,1.5 11.4,3.8 13.1,4.3 14.7,4.6 16.3,9.1 18.0,9.0 19.6,10.4 21.2,9.7 22.9,11.6 24.5,10.4 26.1,11.8 27.8,9.3 29.4,13.6 31.0,21.6 32.7,21.1 34.3,21.0 35.9,19.5 37.6,26.1 39.2,28.0 40.8,26.2 42.4,23.0 44.1,23.9 45.7,23.1 47.3,25.0 49.0,20.2 50.6,16.8 52.2,16.4 53.9,20.0 55.5,24.4 57.1,25.8 58.8,22.3 60.4,20.0 62.0,20.7 63.7,20.9 65.3,21.2 66.9,14.9 68.6,12.6 70.2,13.0 71.8,10.0 73.5,11.9 75.1,9.1 76.7,11.6 78.4,6.4 80.0,6.4" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.21);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+99.75%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">11</td>
+          <td class="ticker">SERV</td>
+          <td class="company">Serve Robotics</td>
+          <td class="num">$9.99</td>
+          <td class="num">$756.1M</td>
+          <td class="num">285.23</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.22);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-15.55%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,0.0 1.6,0.0 3.3,3.4 4.9,8.4 6.5,13.0 8.2,10.7 9.8,13.4 11.4,12.1 13.1,8.1 14.7,11.3 16.3,13.7 18.0,9.6 19.6,3.0 21.2,2.0 22.9,6.5 24.5,6.5 26.1,9.9 27.8,8.0 29.4,9.5 31.0,11.8 32.7,11.3 34.3,9.6 35.9,0.3 37.6,10.2 39.2,14.8 40.8,7.9 42.4,10.1 44.1,11.9 45.7,14.7 47.3,17.3 49.0,11.9 50.6,13.9 52.2,12.9 53.9,15.2 55.5,22.4 57.1,28.0 58.8,21.3 60.4,21.5 62.0,21.2 63.7,22.1 65.3,25.2 66.9,21.9 68.6,24.7 70.2,23.0 71.8,20.8 73.5,16.4 75.1,10.6 76.7,11.7 78.4,10.5 80.0,6.5" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.20);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+93.23%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">12</td>
+          <td class="ticker">GKOS</td>
+          <td class="company">Glaukos</td>
+          <td class="num">$124.55</td>
+          <td class="num">$7.3B</td>
+          <td class="num">14.37</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.19);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+12.49%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,12.4 1.6,11.6 3.3,11.9 4.9,15.9 6.5,18.2 8.2,15.4 9.8,18.3 11.4,3.8 13.1,7.8 14.7,4.6 16.3,4.4 18.0,5.7 19.6,3.9 21.2,3.4 22.9,4.4 24.5,3.7 26.1,7.1 27.8,9.5 29.4,12.8 31.0,17.2 32.7,19.2 34.3,21.8 35.9,22.1 37.6,27.2 39.2,28.0 40.8,26.1 42.4,22.0 44.1,21.7 45.7,22.9 47.3,24.0 49.0,18.1 50.6,19.7 52.2,15.3 53.9,17.2 55.5,21.8 57.1,19.9 58.8,17.3 60.4,12.3 62.0,12.1 63.7,8.2 65.3,9.8 66.9,6.2 68.6,5.4 70.2,8.5 71.8,5.3 73.5,4.3 75.1,3.8 76.7,3.2 78.4,0.0 80.0,0.2" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.13);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+41.05%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">13</td>
+          <td class="ticker">AVAV</td>
+          <td class="company">AeroVironment</td>
+          <td class="num">$197.23</td>
+          <td class="num">$10.0B</td>
+          <td class="num">6.20</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.28);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-23.01%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,6.5 1.6,2.0 3.3,4.9 4.9,10.2 6.5,12.4 8.2,10.1 9.8,5.0 11.4,4.3 13.1,0.0 14.7,4.6 16.3,5.4 18.0,5.2 19.6,7.1 21.2,5.9 22.9,7.9 24.5,19.6 26.1,14.3 27.8,14.8 29.4,16.3 31.0,13.9 32.7,14.5 34.3,16.1 35.9,19.8 37.6,18.7 39.2,20.0 40.8,18.7 42.4,15.8 44.1,17.6 45.7,18.8 47.3,22.5 49.0,20.2 50.6,22.9 52.2,22.1 53.9,22.9 55.5,26.0 57.1,28.0 58.8,26.4 60.4,26.3 62.0,26.0 63.7,24.7 65.3,25.4 66.9,25.3 68.6,27.8 70.2,27.3 71.8,23.3 73.5,23.3 75.1,22.3 76.7,21.3 78.4,24.1 80.0,22.6" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.13);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+36.78%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">14</td>
+          <td class="ticker">NNDM</td>
+          <td class="company">Nano Dimension</td>
+          <td class="num">$1.84</td>
+          <td class="num">$387.0M</td>
+          <td class="num">3.78</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(34,197,94,0.24);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+17.95%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,10.7 1.6,1.5 3.3,0.0 4.9,5.6 6.5,10.7 8.2,12.2 9.8,7.1 11.4,7.1 13.1,5.1 14.7,7.1 16.3,7.1 18.0,7.6 19.6,10.7 21.2,8.7 22.9,13.2 24.5,10.2 26.1,14.8 27.8,13.2 29.4,12.7 31.0,16.3 32.7,15.3 34.3,14.3 35.9,12.7 37.6,15.8 39.2,20.4 40.8,25.5 42.4,25.5 44.1,27.5 45.7,27.5 47.3,28.0 49.0,23.9 50.6,21.4 52.2,18.3 53.9,17.8 55.5,22.9 57.1,26.0 58.8,22.4 60.4,23.9 62.0,24.4 63.7,21.4 65.3,26.0 66.9,23.9 68.6,21.4 70.2,21.9 71.8,21.4 73.5,20.9 75.1,18.8 76.7,17.3 78.4,18.8 80.0,15.3" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.12);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+28.67%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">15</td>
+          <td class="ticker">OMCL</td>
+          <td class="company">Omnicell</td>
+          <td class="num">$37.80</td>
+          <td class="num">$1.7B</td>
+          <td class="num">1.45</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.22);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-16.26%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,14.7 1.6,16.3 3.3,9.2 4.9,12.5 6.5,17.2 8.2,16.3 9.8,13.8 11.4,10.3 13.1,10.2 14.7,5.6 16.3,7.6 18.0,5.9 19.6,2.5 21.2,0.9 22.9,3.3 24.5,2.8 26.1,4.1 27.8,2.0 29.4,0.0 31.0,2.7 32.7,6.8 34.3,9.2 35.9,13.5 37.6,20.2 39.2,22.2 40.8,22.5 42.4,20.3 44.1,23.2 45.7,25.0 47.3,25.9 49.0,22.5 50.6,22.0 52.2,20.7 53.9,19.9 55.5,26.9 57.1,28.0 58.8,25.1 60.4,23.5 62.0,22.9 63.7,23.0 65.3,21.9 66.9,18.9 68.6,19.2 70.2,22.2 71.8,20.5 73.5,16.7 75.1,13.3 76.7,13.2 78.4,11.2 80.0,12.6" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.11);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+27.49%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+        </tr>
+        <tr>
+          <td class="rank">16</td>
+          <td class="ticker">TRMB</td>
+          <td class="company">Trimble</td>
+          <td class="num">$69.50</td>
+          <td class="num">$16.3B</td>
+          <td class="num">4.53</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.18);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-11.27%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,15.2 1.6,12.5 3.3,5.6 4.9,18.8 6.5,15.7 8.2,14.4 9.8,17.1 11.4,12.6 13.1,10.9 14.7,10.0 16.3,17.8 18.0,13.2 19.6,11.7 21.2,7.9 22.9,12.7 24.5,7.2 26.1,4.6 27.8,1.9 29.4,0.0 31.0,1.3 32.7,0.0 34.3,5.2 35.9,10.1 37.6,15.2 39.2,14.1 40.8,13.6 42.4,11.9 44.1,17.4 45.7,13.4 47.3,16.8 49.0,12.8 50.6,18.0 52.2,16.2 53.9,17.7 55.5,26.5 57.1,28.0 58.8,18.5 60.4,19.0 62.0,18.9 63.7,19.1 65.3,22.1 66.9,13.2 68.6,17.8 70.2,20.1 71.8,12.6 73.5,14.0 75.1,13.0 76.7,9.9 78.4,4.1 80.0,3.4" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.11);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+23.62%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">17</td>
+          <td class="ticker">MTLS</td>
+          <td class="company">Materialise</td>
+          <td class="num">$5.43</td>
+          <td class="num">$337.2M</td>
+          <td class="num">1.26</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.08);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-0.37%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,10.1 1.6,7.3 3.3,7.6 4.9,10.1 6.5,11.6 8.2,6.6 9.8,13.1 11.4,12.9 13.1,0.0 14.7,12.1 16.3,16.1 18.0,17.9 19.6,15.9 21.2,14.6 22.9,18.4 24.5,17.7 26.1,18.7 27.8,16.1 29.4,15.1 31.0,17.2 32.7,17.4 34.3,17.7 35.9,16.1 37.6,12.4 39.2,17.2 40.8,17.2 42.4,17.4 44.1,21.4 45.7,23.0 47.3,25.7 49.0,24.5 50.6,24.5 52.2,24.2 53.9,24.5 55.5,28.0 57.1,28.0 58.8,24.5 60.4,23.2 62.0,23.0 63.7,23.7 65.3,22.7 66.9,20.9 68.6,22.5 70.2,21.2 71.8,18.7 73.5,17.9 75.1,15.1 76.7,15.1 78.4,11.4 80.0,12.1" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.11);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+20.40%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">18</td>
+          <td class="ticker">ZBRA</td>
+          <td class="company">Zebra Technologies</td>
+          <td class="num">$237.30</td>
+          <td class="num">$11.7B</td>
+          <td class="num">2.16</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.12);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-4.43%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,8.5 1.6,6.1 3.3,6.6 4.9,8.1 6.5,0.0 8.2,3.6 9.8,5.0 11.4,8.1 13.1,8.4 14.7,7.0 16.3,16.0 18.0,14.3 19.6,13.1 21.2,14.6 22.9,18.8 24.5,18.8 26.1,18.2 27.8,16.0 29.4,16.6 31.0,20.4 32.7,22.6 34.3,23.1 35.9,22.6 37.6,26.2 39.2,26.7 40.8,26.3 42.4,24.3 44.1,24.9 45.7,25.4 47.3,26.4 49.0,25.5 50.6,24.9 52.2,24.6 53.9,26.1 55.5,26.8 57.1,28.0 58.8,24.3 60.4,25.0 62.0,26.7 63.7,23.6 65.3,23.1 66.9,19.8 68.6,19.1 70.2,19.5 71.8,18.0 73.5,17.8 75.1,16.7 76.7,15.4 78.4,14.9 80.0,13.8" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.09);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+6.87%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">19</td>
+          <td class="ticker">PATH</td>
+          <td class="company">UiPath</td>
+          <td class="num">$10.56</td>
+          <td class="num">$5.6B</td>
+          <td class="num">3.51</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.38);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-33.50%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,0.9 1.6,0.0 3.3,0.4 4.9,10.1 6.5,14.1 8.2,13.0 9.8,15.9 11.4,14.7 13.1,13.8 14.7,17.0 16.3,21.9 18.0,22.4 19.6,23.7 21.2,17.7 22.9,17.6 24.5,17.8 26.1,15.2 27.8,14.9 29.4,11.2 31.0,8.8 32.7,8.0 34.3,10.9 35.9,4.8 37.6,12.6 39.2,11.0 40.8,11.1 42.4,7.9 44.1,4.3 45.7,5.9 47.3,7.3 49.0,6.7 50.6,14.9 52.2,16.0 53.9,15.2 55.5,17.9 57.1,16.5 58.8,14.7 60.4,15.3 62.0,13.6 63.7,14.3 65.3,15.9 66.9,20.2 68.6,23.7 70.2,28.0 71.8,22.3 73.5,23.0 75.1,18.5 76.7,18.5 78.4,20.0 80.0,18.9" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.08);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+3.43%</td>
+          <td>—</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">20</td>
+          <td class="ticker">SSYS</td>
+          <td class="company">Stratasys</td>
+          <td class="num">$8.82</td>
+          <td class="num">$760.0M</td>
+          <td class="num">1.38</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.10);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-2.11%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,0.8 1.6,0.0 3.3,0.9 4.9,0.6 6.5,2.9 8.2,2.8 9.8,4.9 11.4,4.1 13.1,4.3 14.7,6.5 16.3,8.7 18.0,9.9 19.6,10.7 21.2,10.4 22.9,12.3 24.5,12.0 26.1,13.6 27.8,11.1 29.4,16.1 31.0,18.5 32.7,19.7 34.3,21.8 35.9,21.7 37.6,22.5 39.2,24.8 40.8,23.8 42.4,23.4 44.1,25.3 45.7,25.5 47.3,26.7 49.0,25.2 50.6,23.6 52.2,23.3 53.9,24.5 55.5,26.4 57.1,28.0 58.8,25.2 60.4,24.4 62.0,24.1 63.7,23.7 65.3,23.7 66.9,21.8 68.6,21.5 70.2,21.4 71.8,20.0 73.5,20.7 75.1,20.2 76.7,19.4 78.4,18.3 80.0,18.1" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(34,197,94,0.08);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">+1.03%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">21</td>
+          <td class="ticker">RXST</td>
+          <td class="company">RxSight</td>
+          <td class="num">$7.44</td>
+          <td class="num">$307.0M</td>
+          <td class="num">2.28</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.33);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-28.32%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,5.4 1.6,6.7 3.3,7.2 4.9,8.9 6.5,11.2 8.2,8.8 9.8,3.2 11.4,4.0 13.1,5.3 14.7,3.0 16.3,0.9 18.0,0.0 19.6,1.3 21.2,10.0 22.9,14.3 24.5,13.1 26.1,13.0 27.8,9.9 29.4,11.1 31.0,12.3 32.7,13.5 34.3,14.0 35.9,15.2 37.6,12.8 39.2,15.8 40.8,14.3 42.4,13.6 44.1,15.6 45.7,21.6 47.3,24.6 49.0,25.1 50.6,26.3 52.2,23.1 53.9,24.1 55.5,26.3 57.1,28.0 58.8,27.3 60.4,25.5 62.0,22.6 63.7,18.9 65.3,21.4 66.9,16.3 68.6,21.3 70.2,20.7 71.8,18.6 73.5,16.4 75.1,16.9 76.7,15.3 78.4,13.1 80.0,14.7" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(239,68,68,0.14);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-47.61%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">22</td>
+          <td class="ticker">GLOB</td>
+          <td class="company">Globant</td>
+          <td class="num">$50.60</td>
+          <td class="num">$2.2B</td>
+          <td class="num">0.91</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.26);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-19.77%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,0.3 1.6,0.1 3.3,0.0 4.9,7.1 6.5,16.4 8.2,16.2 9.8,17.7 11.4,16.2 13.1,21.6 14.7,21.6 16.3,28.0 18.0,26.8 19.6,23.5 21.2,20.0 22.9,15.7 24.5,17.6 26.1,15.6 27.8,12.4 29.4,10.6 31.0,12.9 32.7,14.7 34.3,17.7 35.9,18.6 37.6,22.5 39.2,22.9 40.8,23.7 42.4,23.4 44.1,23.9 45.7,22.8 47.3,23.3 49.0,23.1 50.6,25.7 52.2,24.9 53.9,22.3 55.5,23.6 57.1,21.8 58.8,21.2 60.4,20.5 62.0,18.6 63.7,20.4 65.3,21.2 66.9,21.6 68.6,22.4 70.2,25.5 71.8,20.4 73.5,20.9 75.1,17.2 76.7,16.4 78.4,15.4 80.0,14.4" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(239,68,68,0.15);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-51.41%</td>
+          <td>—</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-up">▲</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+        <tr>
+          <td class="rank">23</td>
+          <td class="ticker">KITT</td>
+          <td class="company">Nauticus Robotics</td>
+          <td class="num">$3.14</td>
+          <td class="num">$109.6M</td>
+          <td class="num">2.60</td>
+          <td class="num"><span class="na">n/a</span></td>
+          <td style="background:rgba(239,68,68,0.58);color:#0d0f14;font-weight:600;text-align:right;padding:9px 10px;">-55.93%</td>
+          <td class="spark"><svg width="80" height="28" viewBox="0 0 80 28"><polyline points="0.0,2.2 1.6,1.3 3.3,4.7 4.9,5.4 6.5,6.4 8.2,9.1 9.8,11.8 11.4,9.1 13.1,7.1 14.7,6.5 16.3,8.6 18.0,7.1 19.6,7.0 21.2,8.5 22.9,12.2 24.5,11.2 26.1,13.8 27.8,12.9 29.4,12.1 31.0,14.0 32.7,13.6 34.3,0.0 35.9,10.6 37.6,10.9 39.2,14.1 40.8,15.3 42.4,15.2 44.1,16.3 45.7,17.7 47.3,18.9 49.0,19.0 50.6,19.6 52.2,19.7 53.9,21.5 55.5,21.9 57.1,23.9 58.8,23.3 60.4,23.3 62.0,22.4 63.7,22.3 65.3,23.8 66.9,23.8 68.6,24.5 70.2,25.8 71.8,23.8 73.5,21.9 75.1,21.4 76.7,22.9 78.4,27.5 80.0,28.0" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round"/></svg></td>
+          <td style="background:rgba(239,68,68,0.20);color:#d4d8e8;font-weight:600;text-align:right;padding:9px 10px;">-94.96%</td>
+          <td>—</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+          <td class="sma-dn">▽</td>
+        </tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  <span>데이터 출처: Yahoo Finance (yfinance) · 정보 제공 목적으로만 사용, 투자 권유 아님</span>
+  <span>Python으로 자동 생성 · 2026년 04월 21일  17:25</span>
+</footer>
+
+<script>
+let sortDir = {};
+function sortTable(col) {
+  const tbl = document.getElementById('tbl');
+  const tb = tbl.tBodies[0];
+  const rows = Array.from(tb.rows);
+  const asc = !sortDir[col];
+  sortDir = {};
+  sortDir[col] = asc;
+
+  rows.sort((a, b) => {
+    let av = a.cells[col].innerText.replace(/[^\d.\-%+]/g, '');
+    let bv = b.cells[col].innerText.replace(/[^\d.\-%+]/g, '');
+    const an = parseFloat(av), bn = parseFloat(bv);
+    if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+    return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  rows.forEach(r => tb.appendChild(r));
+}
+</script>
+</body>
+</html>
