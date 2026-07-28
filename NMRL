@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NASDAQ Macro Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --primary: #3b82f6;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --purple: #a855f7;
+      --orange: #f97316;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg-color); color: var(--text-main); padding: 12px; }
+
+    .dash-title { font-size: 1.1rem; font-weight: 800; color: var(--text-main); border-bottom: 2px solid var(--primary); padding-bottom: 6px; margin-bottom: 4px; }
+    .dash-subtitle { font-size: 0.72rem; color: var(--text-sub); margin-bottom: 12px; line-height: 1.3; }
+
+    .controls-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 12px;
+      font-size: 0.8rem;
+    }
+    .ctrl-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .ctrl-group { display: flex; align-items: center; gap: 4px; }
+    label { font-weight: 600; color: var(--text-sub); font-size: 0.75rem; }
+    select, input[type="range"] {
+      padding: 4px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: #0f172a; color: #fff; font-size: 0.75rem;
+    }
+    .chk-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .chk-item { display: flex; align-items: center; gap: 3px; font-size: 0.73rem; }
+
+    .metric-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+    @media (min-width: 600px) { .metric-row { grid-template-columns: repeat(4, 1fr); } }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .metric-label { font-size: 0.65rem; color: var(--text-sub); text-transform: uppercase; font-weight: 700; }
+    .metric-value { font-size: 1.1rem; font-weight: 800; font-family: monospace; margin: 2px 0; }
+    .metric-delta { font-size: 0.7rem; font-weight: 600; }
+    .delta-up { color: var(--danger); }
+    .delta-down { color: var(--primary); }
+
+    .chart-container { position: relative; width: 100%; height: 55vh; min-height: 360px; margin-bottom: 12px; }
+    #status { font-size: 0.75rem; color: var(--primary); font-weight: bold; margin-bottom: 8px; display: block; }
+    .footer-desc { font-size: 0.65rem; color: var(--text-sub); line-height: 1.3; }
+  </style>
+</head>
+<body>
+
+  <div class="dash-title">🖥 NASDAQ · M2 · 금리 · 글로벌유동성 대시보드</div>
+  <div class="dash-subtitle">NASDAQ Composite · US M2 · Federal Funds Rate · Global Liquidity Proxy (12M Lead)</div>
+
+  <span id="status">⏳ 데이터를 수신하는 중...</span>
+
+  <div class="metric-row">
+    <div class="metric-card">
+      <div class="metric-label">나스닥 (최근)</div>
+      <div class="metric-value" id="m-nasdaq">-</div>
+      <div class="metric-delta" id="d-nasdaq">-</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">M2 통화량 (10억$)</div>
+      <div class="metric-value" id="m-m2">-</div>
+      <div class="metric-delta" id="d-m2">-</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">기준금리 (%)</div>
+      <div class="metric-value" id="m-fed">-</div>
+      <div class="metric-delta" id="d-fed">-</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">글로벌 유동성 YoY</div>
+      <div class="metric-value" id="m-liq">-</div>
+      <div class="metric-delta" id="d-liq">12M 선행 프록시</div>
+    </div>
+  </div>
+
+  <div class="controls-card">
+    <div class="ctrl-row">
+      <div class="ctrl-group">
+        <label>기간:</label>
+        <select id="sel-period" onchange="updateChart()">
+          <option value="YTD">YTD</option>
+          <option value="1Y">1년</option>
+          <option value="3Y">3년</option>
+          <option value="5Y">5년</option>
+          <option value="10Y" selected>10년</option>
+          <option value="20Y">20년</option>
+          <option value="MAX">전체</option>
+        </select>
+      </div>
+      <div class="ctrl-group">
+        <label>Y축 모드:</label>
+        <select id="sel-mode" onchange="updateChart()">
+          <option value="multi">다중 Y축 (로그/원값)</option>
+          <option value="idx">지수화 (기준=100)</option>
+          <option value="pct">증감률 (수익률%)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <div class="ctrl-group">
+        <label>회귀채널 σ:</label>
+        <input type="range" id="reg-std" min="0.5" max="4.0" step="0.1" value="2.0" oninput="document.getElementById('std-val').innerText = this.value; updateChart();">
+        <span id="std-val" style="font-size:0.75rem;">2.0</span>
+      </div>
+      <div class="ctrl-group">
+        <input type="checkbox" id="chk-reglog" checked onchange="updateChart()">
+        <label for="chk-reglog">로그 회귀</label>
+      </div>
+    </div>
+
+    <div class="chk-group">
+      <div class="chk-item"><input type="checkbox" id="chk-nasdaq" checked onchange="updateChart()"><label for="chk-nasdaq">나스닥</label></div>
+      <div class="chk-item"><input type="checkbox" id="chk-reg" checked onchange="updateChart()"><label for="chk-reg">회귀채널</label></div>
+      <div class="chk-item"><input type="checkbox" id="chk-m2" checked onchange="updateChart()"><label for="chk-m2">M2</label></div>
+      <div class="chk-item"><input type="checkbox" id="chk-fed" checked onchange="updateChart()"><label for="chk-fed">기준금리</label></div>
+      <div class="chk-item"><input type="checkbox" id="chk-liq" checked onchange="updateChart()"><label for="chk-liq">글로벌유동성(12M)</label></div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <canvas id="mainChart"></canvas>
+  </div>
+
+  <div class="footer-desc">
+    출처: Yahoo Finance (^IXIC), FRED (M2SL, FEDFUNDS, WALCL, ECBASSETSW, JPNASSETS, DEXUSEU, DEXJPUS)
+  </div>
+
+<script>
+  let RAW_DATA = { nasdaq: [], m2: [], fed: [], liq: [], liqActual: [] };
+  let myChart = null;
+
+  async function fetchWithProxy(targetUrl) {
+    const proxies = [
+      url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      url => `https://corsproxy.io/?${encodeURIComponent(url)}`
+    ];
+    for (let p of proxies) {
+      try {
+        const res = await fetch(p(targetUrl));
+        if (res.ok) return await res.text();
+      } catch (e) {}
+    }
+    throw new Error("Proxy error");
+  }
+
+  async function initData() {
+    const statusEl = document.getElementById('status');
+    try {
+      statusEl.innerText = "⏳ 나스닥 데이터 수신 중...";
+      await fetchNasdaq();
+      
+      statusEl.innerText = "⏳ FRED 거시경제 지표 수신 중 (M2, 금리)...";
+      await Promise.all([fetchFRED_M2(), fetchFRED_Fed()]);
+
+      statusEl.innerText = "⏳ 글로벌 유동성 프록시 수신 중 (Fed+ECB+BOJ)...";
+      await fetchGlobalLiquidity();
+
+      statusEl.style.display = "none";
+      updateMetrics();
+      updateChart();
+    } catch (err) {
+      statusEl.innerText = "❌ 데이터 수신 오류 발생: " + err.message;
+      statusEl.style.color = "#ef4444";
+    }
+  }
+
+  async function fetchNasdaq() {
+    const rawText = await fetchWithProxy("https://query1.finance.yahoo.com/v8/finance/chart/^IXIC?range=25y&interval=1d");
+    const json = JSON.parse(rawText);
+    const result = json.chart.result[0];
+    const timestamps = result.timestamp;
+    const closes = result.indicators.quote[0].close;
+
+    RAW_DATA.nasdaq = timestamps.map((ts, idx) => ({
+      x: new Date(ts * 1000),
+      y: closes[idx]
+    })).filter(d => d.y !== null && !isNaN(d.y));
+  }
+
+  async function fetchFREDSeries(seriesId) {
+    const targetUrl = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`;
+    let text = "";
+    try {
+      const res = await fetch(targetUrl);
+      if(res.ok) text = await res.text();
+      else throw new Error();
+    } catch(e) {
+      text = await fetchWithProxy(targetUrl);
+    }
+
+    const lines = text.trim().split('\n');
+    const data = [];
+    for(let i = 1; i < lines.length; i++) {
+      const [dStr, valStr] = lines[i].split(',');
+      const val = parseFloat(valStr);
+      if(dStr && !isNaN(val)) {
+        data.push({ x: new Date(dStr), y: val });
+      }
+    }
+    return data;
+  }
+
+  async function fetchFRED_M2() { RAW_DATA.m2 = await fetchFREDSeries("M2SL"); }
+  async function fetchFRED_Fed() { RAW_DATA.fed = await fetchFREDSeries("FEDFUNDS"); }
+
+  async function fetchGlobalLiquidity() {
+    try {
+      const [walcl, ecb, boj, eurusd, usdjpy] = await Promise.all([
+        fetchFREDSeries("WALCL"),
+        fetchFREDSeries("ECBASSETSW"),
+        fetchFREDSeries("JPNASSETS"),
+        fetchFREDSeries("DEXUSEU"),
+        fetchFREDSeries("DEXJPUS")
+      ]);
+
+      const toMonthlyLastMap = (series) => {
+        const map = {};
+        series.forEach(d => {
+          const key = `${d.x.getFullYear()}-${String(d.x.getMonth()+1).padStart(2,'0')}`;
+          map[key] = { date: d.x, y: d.y };
+        });
+        return map;
+      };
+
+      const mWalcl = toMonthlyLastMap(walcl);
+      const mEcb = toMonthlyLastMap(ecb);
+      const mBoj = toMonthlyLastMap(boj);
+      const mEur = toMonthlyLastMap(eurusd);
+      const mJpy = toMonthlyLastMap(usdjpy);
+
+      const totalUsdBn = [];
+      Object.keys(mWalcl).sort().forEach(k => {
+        const fedVal = mWalcl[k]?.y / 1000.0 || 0;
+        let ecbValUsd = (mEcb[k] && mEur[k]) ? (mEcb[k].y * mEur[k].y) / 1000.0 : 0;
+        let bojValUsd = (mBoj[k] && mJpy[k]) ? ((mBoj[k].y * 1e8) / mJpy[k].y) / 1e9 : 0;
+
+        if(fedVal > 0) {
+          totalUsdBn.push({ x: mWalcl[k].date, y: fedVal + ecbValUsd + bojValUsd });
+        }
+      });
+
+      const yoy = [], shifted = [];
+      for(let i = 12; i < totalUsdBn.length; i++) {
+        const curr = totalUsdBn[i], prev = totalUsdBn[i-12];
+        const rate = ((curr.y - prev.y) / prev.y) * 100;
+        yoy.push({ x: curr.x, y: rate });
+        const shiftDate = new Date(curr.x);
+        shiftDate.setMonth(shiftDate.getMonth() + 12);
+        shifted.push({ x: shiftDate, y: rate });
+      }
+      RAW_DATA.liqActual = yoy;
+      RAW_DATA.liq = shifted;
+    } catch(e) {}
+  }
+
+  function updateMetrics() {
+    if(RAW_DATA.nasdaq.length > 0) {
+      const last = RAW_DATA.nasdaq[RAW_DATA.nasdaq.length - 1].y;
+      const first = RAW_DATA.nasdaq[0].y;
+      const pct = ((last - first) / first) * 100;
+      document.getElementById('m-nasdaq').innerText = Math.round(last).toLocaleString();
+      document.getElementById('d-nasdaq').innerHTML = `<span class="${pct>=0?'delta-up':'delta-down'}">${pct>=0?'▲':'▼'} ${pct.toFixed(2)}%</span>`;
+    }
+    if(RAW_DATA.m2.length > 0) {
+      const last = RAW_DATA.m2[RAW_DATA.m2.length - 1].y;
+      document.getElementById('m-m2').innerText = Math.round(last).toLocaleString();
+    }
+    if(RAW_DATA.fed.length > 0) {
+      document.getElementById('m-fed').innerText = RAW_DATA.fed[RAW_DATA.fed.length - 1].y.toFixed(2) + "%";
+    }
+    if(RAW_DATA.liqActual.length > 0) {
+      document.getElementById('m-liq').innerText = RAW_DATA.liqActual[RAW_DATA.liqActual.length - 1].y.toFixed(2) + "%";
+    }
+  }
+
+  function calculateRegression(data, isLog, stdMult) {
+    if(!data || data.length < 5) return { center: [], upper: [], lower: [] };
+    const n = data.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    const yVals = [];
+
+    for(let i = 0; i < n; i++) {
+      const y = isLog ? Math.log(data[i].y) : data[i].y;
+      yVals.push(y);
+      sumX += i; sumY += y; sumXY += i * y; sumX2 += i * i;
+    }
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    let resSumSq = 0;
+    for(let i = 0; i < n; i++) {
+      resSumSq += Math.pow(yVals[i] - (slope * i + intercept), 2);
+    }
+    const stdDev = Math.sqrt(resSumSq / n);
+
+    const center = [], upper = [], lower = [];
+    for(let i = 0; i < n; i++) {
+      const cFit = slope * i + intercept;
+      center.push({ x: data[i].x, y: isLog ? Math.exp(cFit) : cFit });
+      upper.push({ x: data[i].x, y: isLog ? Math.exp(cFit + stdMult * stdDev) : cFit + stdMult * stdDev });
+      lower.push({ x: data[i].x, y: isLog ? Math.exp(cFit - stdMult * stdDev) : cFit - stdMult * stdDev });
+    }
+    return { center, upper, lower };
+  }
+
+  function getStartDate() {
+    const sel = document.getElementById('sel-period').value;
+    const now = new Date();
+    if(sel === "YTD") return new Date(now.getFullYear(), 0, 1);
+    if(sel === "1Y") return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    if(sel === "3Y") return new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+    if(sel === "5Y") return new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+    if(sel === "10Y") return new Date(now.getFullYear() - 10, now.getMonth(), now.getDate());
+    if(sel === "20Y") return new Date(now.getFullYear() - 20, now.getMonth(), now.getDate());
+    return new Date(1996, 0, 1);
+  }
+
+  function filterSeries(series, startDate) { return series.filter(d => d.x >= startDate); }
+
+  function normalizeSeries(series, mode) {
+    if(!series || series.length === 0) return [];
+    if(mode === "multi") return series;
+    const base = series[0].y;
+    if(mode === "idx") return series.map(d => ({ x: d.x, y: (d.y / base) * 100 }));
+    if(mode === "pct") return series.map(d => ({ x: d.x, y: ((d.y - base) / base) * 100 }));
+    return series;
+  }
+
+  function updateChart() {
+    const startDate = getStartDate();
+    const mode = document.getElementById('sel-mode').value;
+    const isMultiAxis = (mode === "multi");
+
+    const ndData = normalizeSeries(filterSeries(RAW_DATA.nasdaq, startDate), mode);
+    const m2Data = normalizeSeries(filterSeries(RAW_DATA.m2, startDate), mode);
+    const fedData = normalizeSeries(filterSeries(RAW_DATA.fed, startDate), mode);
+    const liqData = normalizeSeries(filterSeries(RAW_DATA.liq, startDate), mode);
+
+    const datasets = [];
+
+    if(document.getElementById('chk-nasdaq').checked && ndData.length > 0) {
+      datasets.push({ label: '나스닥', data: ndData, borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0, yAxisID: 'y' });
+
+      if(document.getElementById('chk-reg').checked && mode === "multi") {
+        const isLog = document.getElementById('chk-reglog').checked;
+        const stdMult = parseFloat(document.getElementById('reg-std').value);
+        const { center, upper, lower } = calculateRegression(ndData, isLog, stdMult);
+
+        datasets.push({ label: '회귀선', data: center, borderColor: '#f97316', borderWidth: 1.2, borderDash: [4, 4], pointRadius: 0, yAxisID: 'y' });
+        datasets.push({ label: '상단채널', data: upper, borderColor: 'rgba(249,115,22,0.5)', borderWidth: 1, borderDash: [2, 2], pointRadius: 0, yAxisID: 'y' });
+        datasets.push({ label: '하단채널', data: lower, borderColor: 'rgba(249,115,22,0.5)', borderWidth: 1, borderDash: [2, 2], pointRadius: 0, yAxisID: 'y' });
+      }
+    }
+
+    if(document.getElementById('chk-m2').checked && m2Data.length > 0) {
+      datasets.push({ label: 'M2', data: m2Data, borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, yAxisID: isMultiAxis ? 'yM2' : 'y' });
+    }
+    if(document.getElementById('chk-fed').checked && fedData.length > 0) {
+      datasets.push({ label: '기준금리', data: fedData, borderColor: '#22c55e', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, yAxisID: isMultiAxis ? 'yFed' : 'y' });
+    }
+    if(document.getElementById('chk-liq').checked && liqData.length > 0) {
+      datasets.push({ label: '유동성YoY', data: liqData, borderColor: '#a855f7', borderWidth: 1.5, borderDash: [5, 2], pointRadius: 0, yAxisID: isMultiAxis ? 'yLiq' : 'y' });
+    }
+
+    const scalesConfig = {
+      x: { type: 'time', time: { unit: 'year' }, grid: { color: '#334155' }, ticks: { font: { size: 9 }, color: '#94a3b8' } },
+      y: {
+        type: (isMultiAxis && document.getElementById('chk-reglog').checked) ? 'logarithmic' : 'linear',
+        position: 'left',
+        grid: { color: '#334155' },
+        ticks: { font: { size: 9 }, color: '#94a3b8' }
+      }
+    };
+
+    if(isMultiAxis) {
+      if(document.getElementById('chk-m2').checked) scalesConfig.yM2 = { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { size: 8 }, color: '#ef4444' } };
+      if(document.getElementById('chk-fed').checked) scalesConfig.yFed = { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { size: 8 }, color: '#22c55e' } };
+      if(document.getElementById('chk-liq').checked) scalesConfig.yLiq = { position: 'left', grid: { drawOnChartArea: false }, ticks: { font: { size: 8 }, color: '#a855f7' } };
+    }
+
+    if(myChart) myChart.destroy();
+    myChart = new Chart(document.getElementById('mainChart').getContext('2d'), {
+      type: 'line',
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { boxWidth: 10, font: { size: 9 }, color: '#f8fafc' } } },
+        scales: scalesConfig
+      }
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', initData);
+</script>
+</body>
+</html>
