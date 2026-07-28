@@ -151,16 +151,28 @@
 
   async function fetchWithProxy(targetUrl) {
     const proxies = [
-      url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      url => `https://corsproxy.io/?${encodeURIComponent(url)}`
-    ];
-    for (let p of proxies) {
-      try {
-        const res = await fetch(p(targetUrl));
+      async (url) => {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (data && data.contents) return data.contents;
+        throw new Error('No contents');
+      },
+      async (url) => {
+        const res = await fetch(`https://thingproxy.freeboard.io/fetch/${url}`);
         if (res.ok) return await res.text();
-      } catch (e) {}
+        throw new Error('Proxy 2 failed');
+      }
+    ];
+
+    let lastError;
+    for (let pFn of proxies) {
+      try {
+        return await pFn(targetUrl);
+      } catch (e) {
+        lastError = e;
+      }
     }
-    throw new Error("Proxy error");
+    throw new Error("Proxy error: " + (lastError.message || "모든 우회 서버가 응답하지 않습니다."));
   }
 
   async function initData() {
